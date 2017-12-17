@@ -1,0 +1,26 @@
+pokecrystal jumps to CD52 if you enter 15 00
+two functions below write there!!!
+15 0A / 15 0B
+
+
+
+4F 4E - make sure we get safe bytes instead of a function call at CD52
+15 0B C9 - write C9 to CD55
+00 - jump there
+
+37 - need to set carry flag
+C9 - return
+
+frontsprite - $9000-$9310 (7*7*0x10) - VTiles2
+backsprite - $9310-$9550 (6*6*0x10)
+
+compressedPic must be in sram, not upper bank of wram
+
+first byte - donor, determines stats, sprite in battle
+second byte - recepient, determines sprite, gender in battle
+
+00: player sprite color
+FC: gold
+FD: glitchy
+FE: gold
+FF: grey
