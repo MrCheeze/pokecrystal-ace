@@ -7,6 +7,8 @@ SLOT 0 $0
 .ROMBANKS 2
 .BANK 0 SLOT 0
 
+.define CalcPkmnStats $0C
+.define CalcPkmnStatC $0D
 .define PlaceGraphic $13
 .define GetMonBackpic $18
 .define GetMonFrontpic $19
@@ -23,7 +25,17 @@ SLOT 0 $0
 .define DelayFrame $045A
 .define DelayFrames $0468
 .define OpenSRAM $2FD1
+.define CloseSRAM $2FE1
 .define ForceUpdateCGBPals $0C37
+.define Reset $0150
+.define Random $2F8C
+.define FarCall $08
+.define TrainerType1 $0E57EB
+.define GetBaseData $3856
+.define ByteFill $3041
+.define LoadTileMapToTempTileMap $309D
+.define Call_LoadTempTileMapToTileMap $30B4
+.define LoadTempTileMapToTileMap $30BF
 
 .define PartyMonOT $DDFF
 .define PartyMonNicknames $DE41
@@ -38,50 +50,329 @@ SLOT 0 $0
 .define PartySpecies $DCD8
 .define PartyMon1Species $DCDF
 .define PartyMon1Moves $DCE1
+.define wSpecialPhoneCallID $DC31
+.define TempWildMonSpecies $D22E
+.define CurPartySpecies $D108
+.define TempEnemyMonSpecies $D204
+.define TempBattleMonSpecies $D205
+.define hRandom $FFE1
+.define hJoypadDown $FFA4
+.define hJoyDown $FFA8
+.define wRoamMon1MapGroup $DFD1
+.define wRoamMon1MapNumber $DFD2
+.define wRoamMon2MapGroup $DFD6
+.define wRoamMon2MapNumber $DFD7
+.define wRoamMon3MapGroup $DFDD
+.define wRoamMon3MapNumber $DFDE
+.define MusicBank $C29F
+.define wSpriteUpdatesEnabled $C2CE
+.define PlayerName $D47D
+.define PlayerID $D47B
+.define OTPlayerName $D26B
+.define OTPartyCount $D280
+.define OTPartySpecies $D281
+.define OTPartyMon1Species $D288
+.define OTPartyMon1Level $D2A7
+.define OTPartyMon1HP $D2AA
+.define OTPartyMon1MaxHP $D2AC
+.define CurOTMon $C663
+.define rSVBK $FF70 ; save bank
+.define CurSpecies $CF60
+.define CurPartyLevel $D143
+.define EnemyMonHappiness $D212
+.define EnemyMonHP $D216
+.define EnemyMonMaxHP $D218
+.define wCurrentMapPersonEventHeaderPointer $DC05
+.define TMsHMs $D859
+.define TileMap $C4A0
+.define wPlayerStepVectorX $D14E
+.define PlayerState $D95D
+.define ScriptRunning $D438
+.define Player $D4D6
+.define wItemQuantityChangeBuffer $D10C
+.define hMoneyTemp $FFC3
+.define wJumptableIndex $CF63
+.define wCurrPocket $CF65
+.define w2DMenuFlags1 $CFA5
+.define wLinkMode $C2DC
 
-.org PartySpecies
-	.db 105
-.org PartyMon1Species
-	.db $FE
-.org PartyMon1Moves
-	.db 198 63 245 156
+.org $D9C1 ; max length 0x31
+wramCode1:
+runSramCodeAtHL:
+	ret nz
+	push hl
+	call LoadTileMapToTempTileMap
+	xor a
+	call OpenSRAM
+	pop hl
+	ld de,TileMap
+	ld bc,$168
+	call CopyBytes
+	call TileMap
+	jp LoadTempTileMapToTileMap
+	
+everyFrame:
+	ld c,50
+	ld hl,TMsHMs
+	nextTm:
+	ld a,[hl]
+	and a
+	jr z,noTm
+	ld a,25
+	noTm:
+	ld [hli],a
+	dec c
+	jr nz,nextTm
+	
+	
+	ld a, [wSpriteUpdatesEnabled]
+	ld hl,MusicBank
+	dec a
+	jr everyFrameCont
+wramCode1End:
+	
+	
+.org $DA21 ; max length 0x51
+wramCode2:
+everyStep:
+	ld hl,everyStepSram
+	jp runSramCodeAtHL
+	
+everyFrameCont:
+	or [hl]
+	ld hl,startingWildBattle
+	call runSramCodeAtHL
+	
+	
+	ld a,[ScriptRunning]
+	rlc a
+	or $7E
+	ld hl,Player
+	or [hl]
+	ld hl,PlayerState
+	and [hl]
+	ld [hl],a
+	
+	ld a,[w2DMenuFlags1]
+	sub $0C
+	jr nz,notTmPocket
+	xor a
+	ld hl,hMoneyTemp+1
+	ld [hli],a
+	ld [hli],a
+	notTmPocket:
+	
+	ld a, [$C801]
+	sub $FD
+	ld hl,aboutToLink
+	call runSramCodeAtHL
+	
+	ld a,[CurOTMon]
+	sub $FF
+	ld hl,startingTrainerBattle
+	call runSramCodeAtHL
+	
 
-.org PartyMonNicknames ; max length 0xB
-	.db $38 $4F $4E $15 $0B $C9 $00
-	jp nicknameCode
+	ld hl,EnemyMonHP
+	ld a,[hli]
+	or [hl]
+	ret z
+	ld a,[EnemyMonHappiness]
+	cp 70
+	ld hl,sendingOutPokemon
+	jp runSramCodeAtHL
+wramCode2End:
+
 	
-.org RedsName
-	.db $92 $80 $8D $92 $7F $94 $8D $83 $84 $91 $93 $80 $8B $84
-	char50:
-	.db $50
+.org wSpecialPhoneCallID
+	.db $9C
 	
-.org $DA0E ; max length $64
-	nicknameCode:
 	
+.org $BD83 ;sram free space, max length 0x18A (but 0x168 in practice)
+sramCode:
+everyStepSram:
+
+	ld hl,PlayerState
+	ld a,$7E
+	and [hl]
+	jr nz,dontForceBike
+	ldh a,(hJoypadDown # $100)
+	srl a
+	or [hl]
+	and $01
+	ld [hl],a
+	dontForceBike:
+	
+	
+	ld hl,$FF81
+	xor a
+	ld [hld],a
+	ld [hl],$C3 ; jp $E000
+	
+	ld hl,everyFrameSetup-everyStepSram+TileMap
+	ld de,$C000
+	ld bc,everyFrameSetupEnd-everyFrameSetup
+	jp CopyBytes
+	
+everyFrameSetup:
+	ldh a,(rSVBK # $100)
+	sub $F9
+	jr nz,wrongWramBankToRunCode
+	
+	ld hl,everyFrame
+	push hl
+	
+	wrongWramBankToRunCode:
+	ld a,$C4
+	jp $FF82
+everyFrameSetupEnd:
+	
+	
+aboutToLink:
+	ld de,$C801
 	xor a
 	call OpenSRAM
 	
-	ld hl, compressedBackPic
-	ld de, BackPic
-	ld c, 6*6
-	ld a,DecompressPredef
-	call Predef
-	ld hl, compressedFrontPic
-	ld de, FrontPic
-	ld c, 7*7
-	ld a,DecompressPredef
-	call Predef
+	ld hl,RCENameStart
+	ld bc,RCENameEnd-RCENameStart
+	call CopyBytes
 	
+	ld hl,wramCode1
+	ld bc,wramCode1End-wramCode1
+	call CopyBytes
 	
+	ld hl,wramCode2
+	ld bc,wramCode2End-wramCode2
+	call CopyBytes
 	
-	ld de,char50
-	scf
+	ld hl,sramCode
+	ld bc,sramCodeEnd-sramCode
+	call CopyBytes
+	
 	ret
 
-.org $A400 ; must be in sram, not upper bank of wram
-	compressedBackPic:
-	.db $EC $79 $27 $01 $87 $89 $83 $87 $05 $02 $03 $06 $07 $04 $07 $45 $08 $0F $81 $87 $21 $03 $87 $9D $61 $23 $03 $EC $25 $21 $1F $21 $60 $A5 $B3 $A9 $E7 $21 $0F $21 $1C $21 $C6 $21 $FF $06 $7F $E0 $1F $F8 $47 $FF $E0 $44 $FF $40 $43 $80 $FF $00 $CF $24 $FF $21 $FE $21 $FC $23 $84 $21 $7C $EC $23 $A1 $CB $21 $0C $23 $02 $27 $01 $81 $89 $21 $03 $21 $E1 $21 $71 $83 $DF $06 $FC $0F $F0 $3F $C4 $FF $0E $44 $FF $04 $A1 $E1 $03 $03 $FF $E7 $FF $C5 $DA $21 $7E $23 $43 $F0 $25 $DF $BD $00 $5E $A1 $EB $A1 $EE $45 $20 $E0 $81 $87 $CB $8C $8B $00 $D6 $EC $6B $FF
-	compressedFrontPic:
-	.db $EC $F9 $21 $01 $21 $06 $23 $08 $A1 $81 $25 $13 $81 $89 $21 $1A $81 $85 $21 $11 $21 $0C $21 $1F $13 $2F $3F $6F $79 $47 $7C $9B $FF $84 $FF $82 $FF $44 $7F $34 $3F $1C $1F $0F $0F $23 $1F $81 $85 $21 $38 $21 $20 $81 $87 $EC $33 $21 $FF $67 $23 $83 $21 $93 $81 $C9 $83 $93 $21 $55 $21 $FE $21 $01 $81 $87 $81 $F7 $09 $EF $EE $93 $93 $82 $83 $C6 $C7 $82 $83 $43 $FE $FF $83 $80 $21 $EF $21 $C7 $21 $44 $21 $C6 $F8 $37 $00 $FB $21 $C0 $23 $20 $21 $10 $25 $90 $81 $89 $21 $B0 $C3 $88 $21 $60 $21 $F0 $13 $E8 $F8 $EC $3C $C4 $7C $B2 $FE $42 $FE $82 $FE $44 $FC $58 $F8 $70 $F0 $E0 $E0 $23 $F0 $81 $85 $21 $38 $A1 $A1 $81 $87 $EC $F9 $FF
+RCENameStart:
+	.db $4F $4E $15 $0B $C9 $00
+	push hl
+	push de
+	push bc
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;OTPartyMon1Species ($D288)
+	RCENameMiddle:
+	ld a,$9C
+	ld [wSpecialPhoneCallID],a
+	xor a
+	call OpenSRAM
+	ld hl,OTPartyMon1Species+RCENameEnd-RCENameMiddle
 	
-.org $BD83 ; max length $18A
+	ld de,wramCode1
+	ld bc,wramCode1End-wramCode1
+	call CopyBytes
+	
+	ld de,wramCode2
+	ld bc,wramCode2End-wramCode2
+	call CopyBytes
+	
+	ld de,sramCode
+	ld bc,sramCodeEnd-sramCode
+	call CopyBytes
+	
+	pop hl
+	pop de
+	pop bc
+	scf
+	ret
+RCENameEnd:
+
+
+startingWildBattle:
+	ld a,[PlayerID]
+	ld hl,wCurrentMapPersonEventHeaderPointer
+	xor [hl]
+	ld hl,TempEnemyMonSpecies
+	xor [hl]
+	ld [hl],a
+	ld hl,CurPartyLevel
+	ld a,[hl]
+	srl a
+	srl a
+	add [hl]
+	ld [hl],a
+	
+	ld a,$7E
+	ld hl,Player
+	or [hl]
+	ld hl,PlayerState
+	and [hl]
+	ld [hl],a
+	ret
+	
+	
+sendingOutPokemon:
+	ld a,[wLinkMode]
+	and a
+	ret nz
+	
+	ld hl,EnemyMonHappiness
+	xor a
+	ld [hl],a
+	ld l,1 + EnemyMonMaxHP # $100
+	ld a,[hld]
+	ld b,[hl]
+	dec hl
+	ld [hld],a
+	ld [hl],b
+	ret
+	
+	
+startingTrainerBattle:
+	xor a
+	ld [CurOTMon],a
+	
+	ld a,[wLinkMode]
+	and a
+	ret nz
+	
+	ld a,[PlayerID]
+	ld hl,wCurrentMapPersonEventHeaderPointer
+	xor [hl]
+	ld b,a
+	ld de,OTPartySpecies
+	ld hl,OTPartyMon1Species
+	
+	modifyPartyLoop:
+	ld a,[de]
+	inc a
+	ret z
+	xor b
+	ld [de],a
+	inc de
+	ld [hl],a
+	push bc
+	ld bc,OTPartyMon1Level-OTPartyMon1Species
+	add hl,bc
+	ld a,[hl]
+	srl a
+	srl a
+	add [hl]
+	ld [hl],a
+	ld bc,$30+OTPartyMon1Species-OTPartyMon1Level
+	add hl,bc
+	pop bc
+	jr modifyPartyLoop
+	ret
+	
+	.db $55 $55 $55 $55 $55
+sramCodeEnd:
+	

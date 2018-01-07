@@ -24,3 +24,20 @@ FC: gold
 FD: glitchy
 FE: gold
 FF: grey
+
+phone destinations
+D4B6: CD StartDay (maybe safe?)
+D4C2: BC bad
+D5D0: EA bad
+D6CD: 49 bad
+DA21: 9C safe through da72! (0x51)
+DA50: B3 safe through da72!
+DAC5: 6F bad? (events)
+DAF8: 34 bad? (events)
+DE16: BB bad
+DECD: 26 bad
+
+
+TempWildMonSpecies - d22e
+
+D9C1 - 49 bytes

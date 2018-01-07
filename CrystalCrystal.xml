@@ -1,0 +1,6 @@
+<BizHawk-XMLGame System="GB" Name="CrystalCrystal">
+  <LoadAssets>
+    <Asset FileName="Pokemon Crystal.gbc" />
+    <Asset FileName="Pokemon Crystal.gbc" />
+  </LoadAssets>
+</BizHawk-XMLGame>
