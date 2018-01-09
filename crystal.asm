@@ -95,6 +95,8 @@ SLOT 0 $0
 .define wCurrPocket $CF65
 .define w2DMenuFlags1 $CFA5
 .define wLinkMode $C2DC
+.define wRunningTrainerBattleScript $D04D
+.define wPlayerLinkAction $CF56
 
 .org $D9C1 ; max length 0x31
 wramCode1:
@@ -113,21 +115,21 @@ runSramCodeAtHL:
 	
 everyFrame:
 	ld c,50
-	ld hl,TMsHMs
+	ld de,TMsHMs
 	nextTm:
-	ld a,[hl]
+	ld a,[de]
 	and a
 	jr z,noTm
 	ld a,25
 	noTm:
-	ld [hli],a
+	ld [de],a
+	inc de
 	dec c
 	jr nz,nextTm
 	
 	
 	ld a, [wSpriteUpdatesEnabled]
 	ld hl,MusicBank
-	dec a
 	jr everyFrameCont
 wramCode1End:
 	
@@ -139,6 +141,7 @@ everyStep:
 	jp runSramCodeAtHL
 	
 everyFrameCont:
+	dec a
 	or [hl]
 	ld hl,startingWildBattle
 	call runSramCodeAtHL
@@ -146,7 +149,7 @@ everyFrameCont:
 	
 	ld a,[ScriptRunning]
 	rlc a
-	or $7E
+	or $FE
 	ld hl,Player
 	or [hl]
 	ld hl,PlayerState
@@ -162,13 +165,13 @@ everyFrameCont:
 	ld [hli],a
 	notTmPocket:
 	
-	ld a, [$C801]
-	sub $FD
+	ld a, [$C9F5]
+	sub $20
 	ld hl,aboutToLink
 	call runSramCodeAtHL
 	
 	ld a,[CurOTMon]
-	sub $FF
+	inc a
 	ld hl,startingTrainerBattle
 	call runSramCodeAtHL
 	
@@ -178,7 +181,7 @@ everyFrameCont:
 	or [hl]
 	ret z
 	ld a,[EnemyMonHappiness]
-	cp 70
+	sub 70
 	ld hl,sendingOutPokemon
 	jp runSramCodeAtHL
 wramCode2End:
@@ -188,12 +191,12 @@ wramCode2End:
 	.db $9C
 	
 	
-.org $BD83 ;sram free space, max length 0x18A (but 0x168 in practice)
+.org $BD83 ;sram free space, max length 0x101
 sramCode:
 everyStepSram:
 
 	ld hl,PlayerState
-	ld a,$7E
+	ld a,$FE
 	and [hl]
 	jr nz,dontForceBike
 	ldh a,(hJoypadDown # $100)
@@ -228,71 +231,9 @@ everyFrameSetup:
 everyFrameSetupEnd:
 	
 	
-aboutToLink:
-	ld de,$C801
-	xor a
-	call OpenSRAM
-	
-	ld hl,RCENameStart
-	ld bc,RCENameEnd-RCENameStart
-	call CopyBytes
-	
-	ld hl,wramCode1
-	ld bc,wramCode1End-wramCode1
-	call CopyBytes
-	
-	ld hl,wramCode2
-	ld bc,wramCode2End-wramCode2
-	call CopyBytes
-	
-	ld hl,sramCode
-	ld bc,sramCodeEnd-sramCode
-	call CopyBytes
-	
-	ret
-
 RCENameStart:
 	.db $4F $4E $15 $0B $C9 $00
-	push hl
-	push de
-	push bc
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	;OTPartyMon1Species ($D288)
-	RCENameMiddle:
-	ld a,$9C
-	ld [wSpecialPhoneCallID],a
-	xor a
-	call OpenSRAM
-	ld hl,OTPartyMon1Species+RCENameEnd-RCENameMiddle
-	
-	ld de,wramCode1
-	ld bc,wramCode1End-wramCode1
-	call CopyBytes
-	
-	ld de,wramCode2
-	ld bc,wramCode2End-wramCode2
-	call CopyBytes
-	
-	ld de,sramCode
-	ld bc,sramCodeEnd-sramCode
-	call CopyBytes
-	
-	pop hl
-	pop de
-	pop bc
-	scf
-	ret
+	jp (wramCode1End-wramCode1)+(wramCode2End-wramCode2)+(otherPlayerCode-sramCode)+$CB84
 RCENameEnd:
 
 
@@ -304,13 +245,14 @@ startingWildBattle:
 	xor [hl]
 	ld [hl],a
 	ld hl,CurPartyLevel
-	ld a,[hl]
+	ld a,[hli]
+	dec hl
 	srl a
 	srl a
 	add [hl]
 	ld [hl],a
 	
-	ld a,$7E
+	ld a,$FE
 	ld hl,Player
 	or [hl]
 	ld hl,PlayerState
@@ -337,42 +279,111 @@ sendingOutPokemon:
 	
 	
 startingTrainerBattle:
-	xor a
-	ld [CurOTMon],a
+	;xor a
+	;ld [CurOTMon],a
 	
-	ld a,[wLinkMode]
-	and a
-	ret nz
+	;ld a,[wRunningTrainerBattleScript]
+	;and a
+	;ret nz
 	
-	ld a,[PlayerID]
-	ld hl,wCurrentMapPersonEventHeaderPointer
-	xor [hl]
-	ld b,a
-	ld de,OTPartySpecies
-	ld hl,OTPartyMon1Species
+	;ld a,[PlayerID]
+	;ld hl,wCurrentMapPersonEventHeaderPointer
+	;xor [hl]
+	;ld b,a
+	;ld de,OTPartySpecies
+	;ld hl,OTPartyMon1Level
 	
-	modifyPartyLoop:
-	ld a,[de]
-	inc a
-	ret z
-	xor b
-	ld [de],a
-	inc de
-	ld [hl],a
-	push bc
-	ld bc,OTPartyMon1Level-OTPartyMon1Species
-	add hl,bc
-	ld a,[hl]
-	srl a
-	srl a
-	add [hl]
-	ld [hl],a
-	ld bc,$30+OTPartyMon1Species-OTPartyMon1Level
-	add hl,bc
-	pop bc
-	jr modifyPartyLoop
+	;modifyPartyLoop:
+	;ld a,[de]
+	;inc a
+	;ret z
+	;xor b
+	;ld [de],a
+	;inc de
+	;push bc
+	;ld a,[hl]
+	;srl a
+	;srl a
+	;add [hl]
+	;ld [hl],a
+	;ld bc,$0030
+	;add hl,bc
+	;pop bc
+	;jr modifyPartyLoop
 	ret
 	
-	.db $55 $55 $55 $55 $55
+aboutToLink:
+	ld a,[wPlayerLinkAction]
+	cp $05
+	ret nz
+	xor a
+	call OpenSRAM
+	
+	ld de,$C806
+	
+	ld hl,RCENameStart
+	ld bc,RCENameEnd-RCENameStart
+	call CopyBytes
+	
+	ld de,$C9F5
+	
+	ld hl,wramCode1
+	ld c,(wramCode1End-wramCode1) # $100
+	call CopyBytes
+	
+	ld hl,wramCode2
+	ld c,(wramCode2End-wramCode2) # $100
+	ld a,$7F ;;uhhh we really need an FF byte here
+	call CopyBytes
+	
+	ld hl,sramCode
+	ld bc,(sramCodeEnd-sramCode)
+	call CopyBytes
+	
+	; fall through
+	ld hl,$C9F5 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)
+encryptedSramPartEnd:
+
+encryptPayload: ; needed to prevent $21 being replaced with $FE
+	ld bc,(encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)
+	payloadLoop:
+	dec bc
+	dec hl
+	ld a,$80
+	add [hl]
+	ld [hl],a
+	ld a,b
+	or c
+	jr nz,payloadLoop
+	
+	ret
+	
+otherPlayerCode:
+	ld a,$9C
+	ld [wSpecialPhoneCallID],a
+	xor a
+	call OpenSRAM
+
+	ld h,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)) / $100
+	ld l,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)) # $100
+	call (wramCode1End-wramCode1)+(wramCode2End-wramCode2)+(encryptPayload-sramCode)+$CB84
+	
+	ld de,wramCode1
+	ld c,wramCode1End-wramCode1
+	call CopyBytes
+
+	ld de,wramCode2
+	ld c,(wramCode2End-wramCode2) # $100
+	call CopyBytes
+	
+	ld de,sramCode
+	ld bc,(sramCodeEnd-sramCode)
+	call CopyBytes
+	
+	ld h,$C5
+	ld l,$44
+	ld de,$15CC
+	scf
+	ret
 sramCodeEnd:
 	
