@@ -97,6 +97,9 @@ SLOT 0 $0
 .define wLinkMode $C2DC
 .define wRunningTrainerBattleScript $D04D
 .define wPlayerLinkAction $CF56
+.define CurItem $D106
+.define TextBoxFlags $CFCF
+.define HM01Quantity $D88B
 
 .org $D9C1 ; max length 0x31
 wramCode1:
@@ -114,22 +117,16 @@ runSramCodeAtHL:
 	jp LoadTempTileMapToTileMap
 	
 everyFrame:
-	ld c,50
-	ld de,TMsHMs
-	nextTm:
-	ld a,[de]
-	and a
-	jr z,noTm
-	ld a,25
-	noTm:
-	ld [de],a
-	inc de
-	dec c
-	jr nz,nextTm
-	
-	
 	ld a, [wSpriteUpdatesEnabled]
 	ld hl,MusicBank
+	dec a
+	or [hl]
+	ld hl,startingWildBattle
+	call runSramCodeAtHL
+	
+	ld a, [$C9F5]
+	sub $20
+	ld hl,aboutToLink
 	jr everyFrameCont
 wramCode1End:
 	
@@ -141,11 +138,26 @@ everyStep:
 	jp runSramCodeAtHL
 	
 everyFrameCont:
-	dec a
-	or [hl]
-	ld hl,startingWildBattle
 	call runSramCodeAtHL
 	
+	ld a,[CurOTMon]
+	inc a
+	ld hl,startingTrainerBattle
+	call runSramCodeAtHL
+	
+	ld a,[TextBoxFlags]
+	ld hl,wCurrPocket
+	add [hl]
+	sub 6
+	jr nz,dontChangeItem
+	ld a,$F3
+	ld [CurItem],a
+	ld hl,HM01Quantity
+	ld a,[hl]
+	swap [hl]
+	or [hl]
+	ld [hl],a
+	dontChangeItem:
 	
 	ld a,[ScriptRunning]
 	rlc a
@@ -155,25 +167,6 @@ everyFrameCont:
 	ld hl,PlayerState
 	and [hl]
 	ld [hl],a
-	
-	ld a,[w2DMenuFlags1]
-	sub $0C
-	jr nz,notTmPocket
-	xor a
-	ld hl,hMoneyTemp+1
-	ld [hli],a
-	ld [hli],a
-	notTmPocket:
-	
-	ld a, [$C9F5]
-	sub $20
-	ld hl,aboutToLink
-	call runSramCodeAtHL
-	
-	ld a,[CurOTMon]
-	inc a
-	ld hl,startingTrainerBattle
-	call runSramCodeAtHL
 	
 
 	ld hl,EnemyMonHP
@@ -279,37 +272,37 @@ sendingOutPokemon:
 	
 	
 startingTrainerBattle:
-	;xor a
-	;ld [CurOTMon],a
+	xor a
+	ld [CurOTMon],a
 	
-	;ld a,[wRunningTrainerBattleScript]
-	;and a
-	;ret nz
+	ld a,[wRunningTrainerBattleScript]
+	and a
+	ret nz
 	
-	;ld a,[PlayerID]
-	;ld hl,wCurrentMapPersonEventHeaderPointer
-	;xor [hl]
-	;ld b,a
-	;ld de,OTPartySpecies
-	;ld hl,OTPartyMon1Level
+	ld a,[PlayerID]
+	ld hl,wCurrentMapPersonEventHeaderPointer
+	xor [hl]
+	ld b,a
+	ld de,OTPartySpecies
+	ld hl,OTPartyMon1Level
 	
-	;modifyPartyLoop:
-	;ld a,[de]
-	;inc a
-	;ret z
-	;xor b
-	;ld [de],a
-	;inc de
-	;push bc
-	;ld a,[hl]
-	;srl a
-	;srl a
-	;add [hl]
-	;ld [hl],a
-	;ld bc,$0030
-	;add hl,bc
-	;pop bc
-	;jr modifyPartyLoop
+	modifyPartyLoop:
+	ld a,[de]
+	inc a
+	ret z
+	xor b
+	ld [de],a
+	inc de
+	push bc
+	ld a,[hl]
+	srl a
+	srl a
+	add [hl]
+	ld [hl],a
+	ld bc,$0030
+	add hl,bc
+	pop bc
+	jr modifyPartyLoop
 	ret
 	
 aboutToLink:
