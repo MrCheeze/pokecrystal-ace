@@ -56,6 +56,8 @@ SLOT 0 $0
 .define TempEnemyMonSpecies $D204
 .define TempBattleMonSpecies $D205
 .define hRandom $FFE1
+.define hJoypadReleased $ffa2
+.define hJoypadPressed $ffa3
 .define hJoypadDown $FFA4
 .define hJoyDown $FFA8
 .define wRoamMon1MapGroup $DFD1
@@ -103,8 +105,48 @@ SLOT 0 $0
 
 .org $D9C1 ; max length 0x31
 wramCode1:
+everyFrame:
+	
+	ld hl,wSpecialPhoneCallID
+	ld a,[hl]
+	and a
+	jr nz,dontChangePhone
+	ld [hl],$9C
+	dontChangePhone:
+	
+	ld hl,ScriptRunning
+	ld b,[hl]
+	inc b
+	ld hl,PlayerState
+	ld a,[hl]
+	and $FE
+	jr nz,dontChangeBike
+	ldh a, (hJoypadDown # $100)
+	srl a
+	and b
+	and $01
+	ld [hl],a
+	dontChangeBike:
+	
+	ld a, [$C9F5]
+	sub $20
+	ld hl,aboutToLink
+	jr z,runSramCodeAtHL
+	
+	ld a,[TextBoxFlags]
+	ld hl,wCurrPocket
+	add [hl]
+	
+	jr everyFrameCont
+wramCode1End:
+	
+	
+.org $DA21 ; max length 0x51
+wramCode2:
+everyStep:
+	ld hl,everyStepSram
+	; fall through
 runSramCodeAtHL:
-	ret nz
 	push hl
 	call LoadTileMapToTempTileMap
 	xor a
@@ -116,67 +158,40 @@ runSramCodeAtHL:
 	call TileMap
 	jp LoadTempTileMapToTileMap
 	
-everyFrame:
-	ld a, [wSpriteUpdatesEnabled]
-	ld hl,MusicBank
-	dec a
-	or [hl]
-	ld hl,startingWildBattle
-	call runSramCodeAtHL
-	
-	ld a, [$C9F5]
-	sub $20
-	ld hl,aboutToLink
-	jr everyFrameCont
-wramCode1End:
-	
-	
-.org $DA21 ; max length 0x51
-wramCode2:
-everyStep:
-	ld hl,everyStepSram
-	jp runSramCodeAtHL
-	
 everyFrameCont:
-	call runSramCodeAtHL
-	
-	ld a,[CurOTMon]
-	inc a
-	ld hl,startingTrainerBattle
-	call runSramCodeAtHL
-	
-	ld a,[TextBoxFlags]
-	ld hl,wCurrPocket
-	add [hl]
 	sub 6
+	ld hl,HM01Quantity
 	jr nz,dontChangeItem
 	ld a,$F3
 	ld [CurItem],a
-	ld hl,HM01Quantity
 	ld a,[hl]
 	swap [hl]
 	or [hl]
 	ld [hl],a
 	dontChangeItem:
 	
-	ld a,[ScriptRunning]
-	rlc a
-	or $FE
-	ld hl,Player
-	or [hl]
-	ld hl,PlayerState
-	and [hl]
-	ld [hl],a
+	ld a,[MusicBank]
+	and a
+	ld hl,startingWildBattle
+	jr z,runSramCodeAtHL
 	
-
+	ld a,[CurOTMon]
+	inc a
+	ld hl,startingTrainerBattle
+	jr z,runSramCodeAtHL
+	
 	ld hl,EnemyMonHP
 	ld a,[hli]
 	or [hl]
-	ret z
+	jr z,notSendingOutPokemon
 	ld a,[EnemyMonHappiness]
 	sub 70
 	ld hl,sendingOutPokemon
-	jp runSramCodeAtHL
+	jr z,runSramCodeAtHL
+	notSendingOutPokemon:
+
+	ret
+
 wramCode2End:
 
 	
@@ -188,18 +203,6 @@ wramCode2End:
 sramCode:
 everyStepSram:
 
-	ld hl,PlayerState
-	ld a,$FE
-	and [hl]
-	jr nz,dontForceBike
-	ldh a,(hJoypadDown # $100)
-	srl a
-	or [hl]
-	and $01
-	ld [hl],a
-	dontForceBike:
-	
-	
 	ld hl,$FF81
 	xor a
 	ld [hld],a
@@ -229,8 +232,10 @@ RCENameStart:
 	jp (wramCode1End-wramCode1)+(wramCode2End-wramCode2)+(otherPlayerCode-sramCode)+$CB84
 RCENameEnd:
 
-
 startingWildBattle:
+	ld a, [wSpriteUpdatesEnabled]
+	dec a
+	ret nz
 	ld a,[PlayerID]
 	ld hl,wCurrentMapPersonEventHeaderPointer
 	xor [hl]
@@ -238,18 +243,10 @@ startingWildBattle:
 	xor [hl]
 	ld [hl],a
 	ld hl,CurPartyLevel
-	ld a,[hli]
-	dec hl
+	ld a,[hl]
 	srl a
-	srl a
+	;srl a
 	add [hl]
-	ld [hl],a
-	
-	ld a,$FE
-	ld hl,Player
-	or [hl]
-	ld hl,PlayerState
-	and [hl]
 	ld [hl],a
 	ret
 	
@@ -275,7 +272,7 @@ startingTrainerBattle:
 	xor a
 	ld [CurOTMon],a
 	
-	ld a,[wRunningTrainerBattleScript]
+	ld a,[wLinkMode]
 	and a
 	ret nz
 	
@@ -296,7 +293,7 @@ startingTrainerBattle:
 	push bc
 	ld a,[hl]
 	srl a
-	srl a
+	;srl a
 	add [hl]
 	ld [hl],a
 	ld bc,$0030
@@ -317,6 +314,7 @@ aboutToLink:
 	ld hl,RCENameStart
 	ld bc,RCENameEnd-RCENameStart
 	call CopyBytes
+	ld a,$7F ; we need an FF byte at $cc9e
 	
 	ld de,$C9F5
 	
@@ -326,7 +324,6 @@ aboutToLink:
 	
 	ld hl,wramCode2
 	ld c,(wramCode2End-wramCode2) # $100
-	ld a,$7F ;;uhhh we really need an FF byte here
 	call CopyBytes
 	
 	ld hl,sramCode
@@ -352,8 +349,6 @@ encryptPayload: ; needed to prevent $21 being replaced with $FE
 	ret
 	
 otherPlayerCode:
-	ld a,$9C
-	ld [wSpecialPhoneCallID],a
 	xor a
 	call OpenSRAM
 
@@ -373,9 +368,13 @@ otherPlayerCode:
 	ld bc,(sramCodeEnd-sramCode)
 	call CopyBytes
 	
+	call everyFrame
+	
 	ld h,$C5
 	ld l,$44
-	ld de,$15CC
+	ld de,OTPlayerName
+	ld a,$50
+	ld [de],a
 	scf
 	ret
 sramCodeEnd:
