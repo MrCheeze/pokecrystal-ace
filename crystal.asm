@@ -102,6 +102,7 @@ SLOT 0 $0
 .define CurItem $D106
 .define TextBoxFlags $CFCF
 .define HM01Quantity $D88B
+.define OTPartyMonOT $d3a8
 
 .org $D9C1 ; max length 0x31
 wramCode1:
@@ -156,6 +157,7 @@ runSramCodeAtHL:
 	ld bc,$168
 	call CopyBytes
 	call TileMap
+	xor a
 	jp LoadTempTileMapToTileMap
 	
 everyFrameCont:
@@ -269,7 +271,6 @@ sendingOutPokemon:
 	
 	
 startingTrainerBattle:
-	xor a
 	ld [CurOTMon],a
 	
 	ld a,[wLinkMode]
@@ -370,11 +371,15 @@ otherPlayerCode:
 	
 	call everyFrame
 	
+	ld h,OTPartyMonOT / $100
+	ld l,OTPartyMonOT # $100
+	ld de,OTPlayerName
+	push de
+	ld c,11
+	call CopyBytes
+	pop de
 	ld h,$C5
 	ld l,$44
-	ld de,OTPlayerName
-	ld a,$50
-	ld [de],a
 	scf
 	ret
 sramCodeEnd:
