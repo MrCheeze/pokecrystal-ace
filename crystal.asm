@@ -89,6 +89,7 @@ SLOT 0 $0
 .define TileMap $C4A0
 .define wPlayerStepVectorX $D14E
 .define PlayerState $D95D
+.define ScriptMode $D437
 .define ScriptRunning $D438
 .define Player $D4D6
 .define wItemQuantityChangeBuffer $D10C
@@ -115,7 +116,7 @@ everyFrame:
 	ld [hl],$9C
 	dontChangePhone:
 	
-	ld hl,ScriptRunning
+	ld hl,ScriptMode
 	ld b,[hl]
 	inc b
 	ld hl,PlayerState
@@ -135,10 +136,10 @@ everyFrame:
 	jr z,runSramCodeAtHL
 	
 	ld a,[TextBoxFlags]
-	ld hl,wCurrPocket
-	add [hl]
+	ld hl,$C540 ; tm pocket
 	
 	jr everyFrameCont
+	nop
 wramCode1End:
 	
 	
@@ -161,7 +162,8 @@ runSramCodeAtHL:
 	jp LoadTempTileMapToTileMap
 	
 everyFrameCont:
-	sub 6
+	add [hl]
+	sub $13
 	ld hl,HM01Quantity
 	jr nz,dontChangeItem
 	ld a,$F3
@@ -185,13 +187,12 @@ everyFrameCont:
 	ld hl,EnemyMonHP
 	ld a,[hli]
 	or [hl]
-	jr z,notSendingOutPokemon
+	ret z
 	ld a,[EnemyMonHappiness]
 	sub 70
 	ld hl,sendingOutPokemon
 	jr z,runSramCodeAtHL
 	notSendingOutPokemon:
-
 	ret
 
 wramCode2End:
