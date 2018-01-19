@@ -137,9 +137,9 @@ everyFrame:
 	
 	ld a,[TextBoxFlags]
 	ld hl,$C540 ; tm pocket
+	add [hl]
 	
 	jr everyFrameCont
-	nop
 wramCode1End:
 	
 	
@@ -158,14 +158,12 @@ runSramCodeAtHL:
 	ld bc,$168
 	call CopyBytes
 	call TileMap
-	xor a
 	jp LoadTempTileMapToTileMap
 	
 everyFrameCont:
-	add [hl]
 	sub $13
-	ld hl,HM01Quantity
 	jr nz,dontChangeItem
+	ld hl,HM01Quantity
 	ld a,$F3
 	ld [CurItem],a
 	ld a,[hl]
@@ -174,8 +172,10 @@ everyFrameCont:
 	ld [hl],a
 	dontChangeItem:
 	
-	ld a,[MusicBank]
-	and a
+	ld a, [wSpriteUpdatesEnabled]
+	dec a
+	ld hl,MusicBank
+	or [hl]
 	ld hl,startingWildBattle
 	jr z,runSramCodeAtHL
 	
@@ -184,10 +184,6 @@ everyFrameCont:
 	ld hl,startingTrainerBattle
 	jr z,runSramCodeAtHL
 	
-	ld hl,EnemyMonHP
-	ld a,[hli]
-	or [hl]
-	ret z
 	ld a,[EnemyMonHappiness]
 	sub 70
 	ld hl,sendingOutPokemon
@@ -202,7 +198,7 @@ wramCode2End:
 	.db $9C
 	
 	
-.org $BD83 ;sram free space, max length 0x101
+.org $BD83 ;sram free space, max length 0x152
 sramCode:
 everyStepSram:
 
@@ -232,13 +228,10 @@ everyFrameSetupEnd:
 	
 RCENameStart:
 	.db $4F $4E $15 $0B $C9 $00
-	jp (wramCode1End-wramCode1)+(wramCode2End-wramCode2)+(otherPlayerCode-sramCode)+$CB84
+	jp (wramCode1End-wramCode1)+(otherPlayerCode-sramCode)+$CB84
 RCENameEnd:
 
 startingWildBattle:
-	ld a, [wSpriteUpdatesEnabled]
-	dec a
-	ret nz
 	ld a,[PlayerID]
 	ld hl,wCurrentMapPersonEventHeaderPointer
 	xor [hl]
@@ -258,10 +251,16 @@ sendingOutPokemon:
 	ld a,[wLinkMode]
 	and a
 	ret nz
+
+	ld hl,EnemyMonHP
+	ld a,[hli]
+	or [hl]
+	ret z
 	
-	ld hl,EnemyMonHappiness
+	ld l,EnemyMonHappiness # $100
 	xor a
 	ld [hl],a
+	
 	ld l,1 + EnemyMonMaxHP # $100
 	ld a,[hld]
 	ld b,[hl]
@@ -272,6 +271,7 @@ sendingOutPokemon:
 	
 	
 startingTrainerBattle:
+	xor a
 	ld [CurOTMon],a
 	
 	ld a,[wLinkMode]
@@ -311,21 +311,19 @@ aboutToLink:
 	xor a
 	call OpenSRAM
 	
-	ld de,$C806
-	
 	ld hl,RCENameStart
+	ld de,$C806
 	ld bc,RCENameEnd-RCENameStart
-	call CopyBytes
-	ld a,$7F ; we need an FF byte at $cc9e
-	
-	ld de,$C9F5
-	
-	ld hl,wramCode1
-	ld c,(wramCode1End-wramCode1) # $100
 	call CopyBytes
 	
 	ld hl,wramCode2
+	ld de,$C6CE-(wramCode2End-wramCode2)
 	ld c,(wramCode2End-wramCode2) # $100
+	call CopyBytes
+	
+	ld hl,wramCode1
+	ld de,$C9F5
+	ld c,(wramCode1End-wramCode1) # $100
 	call CopyBytes
 	
 	ld hl,sramCode
@@ -333,11 +331,11 @@ aboutToLink:
 	call CopyBytes
 	
 	; fall through
-	ld hl,$C9F5 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)
+	ld hl,$C9F5 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)
 encryptedSramPartEnd:
 
 encryptPayload: ; needed to prevent $21 being replaced with $FE
-	ld bc,(encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)
+	ld bc,(encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)
 	payloadLoop:
 	dec bc
 	dec hl
@@ -354,20 +352,22 @@ otherPlayerCode:
 	xor a
 	call OpenSRAM
 
-	ld h,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)) / $100
-	ld l,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)+(wramCode2End-wramCode2)) # $100
-	call (wramCode1End-wramCode1)+(wramCode2End-wramCode2)+(encryptPayload-sramCode)+$CB84
+	ld h,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)) / $100
+	ld l,($CB84 + (encryptedSramPartEnd-sramCode)+(wramCode1End-wramCode1)) # $100
+	call (wramCode1End-wramCode1)+(encryptPayload-sramCode)+$CB84
 	
 	ld de,wramCode1
 	ld c,wramCode1End-wramCode1
 	call CopyBytes
-
-	ld de,wramCode2
-	ld c,(wramCode2End-wramCode2) # $100
-	call CopyBytes
 	
 	ld de,sramCode
 	ld bc,(sramCodeEnd-sramCode)
+	call CopyBytes
+
+	ld hl,$C798-(wramCode2End-wramCode2)
+	ld c,(wramCode2End-wramCode2) # $100
+	ld a,$FF ; we need an FF byte at $cc9e
+	ld de,wramCode2
 	call CopyBytes
 	
 	call everyFrame
@@ -376,7 +376,7 @@ otherPlayerCode:
 	ld l,OTPartyMonOT # $100
 	ld de,OTPlayerName
 	push de
-	ld c,11
+	ld bc,11
 	call CopyBytes
 	pop de
 	ld h,$C5
