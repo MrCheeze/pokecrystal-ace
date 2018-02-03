@@ -12,6 +12,7 @@ SLOT 0 $0
 .define PlaceGraphic $13
 .define GetMonBackpic $18
 .define GetMonFrontpic $19
+;.define FillMoves $1B
 .define GetFrontpic $3C
 .define GetBackpic $3D
 .define FrontpicPredef $3E
@@ -29,13 +30,13 @@ SLOT 0 $0
 .define ForceUpdateCGBPals $0C37
 .define Reset $0150
 .define Random $2F8C
-.define FarCall $08
 .define TrainerType1 $0E57EB
 .define GetBaseData $3856
 .define ByteFill $3041
 .define LoadTileMapToTempTileMap $309D
 .define Call_LoadTempTileMapToTileMap $30B4
 .define LoadTempTileMapToTileMap $30BF
+.define FillMoves $1064E1
 
 .define PartyMonOT $DDFF
 .define PartyMonNicknames $DE41
@@ -55,6 +56,7 @@ SLOT 0 $0
 .define CurPartySpecies $D108
 .define TempEnemyMonSpecies $D204
 .define TempBattleMonSpecies $D205
+.define EnemyMonMoves $D208
 .define hRandom $FFE1
 .define hJoypadReleased $ffa2
 .define hJoypadPressed $ffa3
@@ -104,6 +106,11 @@ SLOT 0 $0
 .define TextBoxFlags $CFCF
 .define HM01Quantity $D88B
 .define OTPartyMonOT $d3a8
+.define BattleType $D230
+.define sMobileEventIndex $be3c ; sram bank 01
+.define hROMBank $ff9d
+.define InBattleTowerBattle $cfc0
+.define Options2 $cfd1 ; menu account
 
 .org $D9C1 ; max length 0x31
 wramCode1:
@@ -111,7 +118,7 @@ everyFrame:
 	
 	ld hl,wSpecialPhoneCallID
 	ld a,[hl]
-	and a
+	and $FA ; change if 0,1,4,or 5. only the 0 and 5 case matter, the other two are side effects.
 	jr nz,dontChangePhone
 	ld [hl],$9C
 	dontChangePhone:
@@ -137,7 +144,6 @@ everyFrame:
 	
 	ld a,[TextBoxFlags]
 	ld hl,$C540 ; tm pocket
-	add [hl]
 	
 	jr everyFrameCont
 wramCode1End:
@@ -162,6 +168,7 @@ runSramCodeAtHL:
 	
 everyFrameCont:
 	sub $13
+	add [hl]
 	jr nz,dontChangeItem
 	ld hl,HM01Quantity
 	ld a,$F3
@@ -188,7 +195,6 @@ everyFrameCont:
 	sub 70
 	ld hl,sendingOutPokemon
 	jr z,runSramCodeAtHL
-	notSendingOutPokemon:
 	ret
 
 wramCode2End:
@@ -201,16 +207,21 @@ wramCode2End:
 .org $BD83 ;sram free space, max length 0x152
 sramCode:
 everyStepSram:
-
 	ld hl,$FF81
 	xor a
 	ld [hld],a
 	ld [hl],$C3 ; jp $E000
 	
+	ld a,1
+	call OpenSRAM
+	ld a,$0B
+	ld [sMobileEventIndex],a
+	
 	ld hl,everyFrameSetup-everyStepSram+TileMap
 	ld de,$C000
 	ld bc,everyFrameSetupEnd-everyFrameSetup
 	jp CopyBytes
+	ret
 	
 everyFrameSetup:
 	ldh a,(rSVBK # $100)
@@ -232,6 +243,10 @@ RCENameStart:
 RCENameEnd:
 
 startingWildBattle:
+	ld a,[Options2]
+	and a
+	ret z
+	
 	ld a,[PlayerID]
 	ld hl,wCurrentMapPersonEventHeaderPointer
 	xor [hl]
@@ -241,9 +256,16 @@ startingWildBattle:
 	ld hl,CurPartyLevel
 	ld a,[hl]
 	srl a
-	;srl a
+	srl a
 	add [hl]
 	ld [hl],a
+	
+	ld hl,BattleType
+	ldh a,(hRandom # $100)
+	or [hl]
+	ret nz
+	ld a,$07 ;shiny
+	ld [BattleType],a
 	ret
 	
 	
@@ -260,6 +282,14 @@ sendingOutPokemon:
 	ld l,EnemyMonHappiness # $100
 	xor a
 	ld [hl],a
+	ld [$D1EA],a
+	ld hl,EnemyMonMoves+2
+	; intentionally leave last move unchanged
+	ld [hld],a
+	ld [hld],a
+	; intentionally leave first move unchanged
+	ld d,h
+	ld e,l
 	
 	ld l,1 + EnemyMonMaxHP # $100
 	ld a,[hld]
@@ -267,15 +297,27 @@ sendingOutPokemon:
 	dec hl
 	ld [hld],a
 	ld [hl],b
+	
+	ld a,FillMoves / $10000
+	ld [$2000],a
+	call FillMoves # $10000
+	ldh a,(hROMBank # $100)
+	ld [$2000],a
 	ret
 	
 	
 startingTrainerBattle:
+	
 	xor a
 	ld [CurOTMon],a
 	
-	ld a,[wLinkMode]
+	ld a,[Options2]
 	and a
+	ret z
+	
+	ld a,[wLinkMode]
+	ld hl,InBattleTowerBattle
+	or [hl]
 	ret nz
 	
 	ld a,[PlayerID]

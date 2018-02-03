@@ -1,3 +1,5 @@
+don't use predef, it breaks things if timing is bad
+
 pokecrystal jumps to CD52 if you enter 15 00
 two functions below write there!!!
 15 0A / 15 0B
@@ -41,3 +43,5 @@ DECD: 26 bad
 TempWildMonSpecies - d22e
 
 D9C1 - 49 bytes
+
+Languages available: Eng, Jpn, French, Spanish, German, Italian
